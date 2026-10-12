@@ -232,3 +232,302 @@ show ip interface brief
 ```
 
 **หลักสำคัญที่สุด:** เลือก Interface ให้ตรงกับพอร์ตที่เสียบสายก่อน จากนั้นเปิด Interface ด้วย `no shutdown` แล้วจึงกำหนด IP Address ให้ตรงกับ Subnet ที่ออกแบบไว้
+
+ต่อไปเป็นการทำให้ Router 2 เเจกการตั้งค่าเครือข่ายให้ PC ใน LAN 2
+เเละเราจะใช้ DHCP ในการแจก IP แบบอัติโนมัติ
+
+LAN 1 เลือก IP เอง เเต่รอบนี้
+PC ขอค่าการตั้งค่าเครือข่าย >> Router2 เเจกค่าให้ PC ได้ IP add sub, default gateway and dns server
+
+                        เราจะเน้นตรง DHCP Pool
+
+ก่อนสร้าง DHCP Pool ต้องตั้ง IP ให้ Router2 ฝั่ง LAN ก่อน
+LAN 2 เราใช้
+
+Network: 192.168.1.64 /26
+IP ที่ใช้ได้: 192.168.1.65 – 192.168.1.126
+Broadcast: 192.168.1.127
+
+เราเลือกใช้ Last IP usable ให้กับ Router = .126
+
+Router2# configure terminal
+Router2(config)# interface fastEthernet 0/0
+Router2(config-if)# no shutdown
+Router2(config-if)# ip address 192.168.1.126 255.255.255.192
+
+ตอนนี้พอร์ต LAN ของ Router2 มี IP แล้ว แต่ ยังไม่ได้สร้างชุดข้อมูลสำหรับแจกให้ PC ขั้นต่อไปจึงเป็น DHCP Pool
+
+DHCP Pool คืออะไร?
+
+      ให้มองว่าเป็น ชุดการตั้งค่าที่ Router ใช้แจกให้ PC ในวงที่กำหนด
+      ภายใน Pool เราบอก Router ว่า:
+      DHCP Pool: NewYork
+      |
+      ├── แจก IP จาก Subnet ไหน?
+      ├── บอก PC ให้ใช้ Gateway อะไร?
+      └── บอก PC ให้ใช้ DNS Server อะไร?
+
+Router2(config-if)# exit
+Router2(config)# ip dhcp pool NewYork
+Router2(dhcp-config)#
+
+Prompt เปลี่ยนเป็น:
+
+            Router2(dhcp-config)#
+            แปลว่า คำสั่งถัดไปกำลังตั้งค่าภายใน DHCP Pool ที่เลือกอยู่
+
+
+            Pool ว่าจะใช้ Subnet ไหนแจก IP
+                  Router2(dhcp-config)# network 192.168.1.64 /26
+
+                        Pool นี้ใช้ Subnet 192.168.1.64/26 สำหรับแจก IP ให้เครื่องลูกข่าย
+
+                        เขียนด้วย Subnet Mask แบบเต็มก็ได้:
+
+                        Router2(dhcp-config)# network 192.168.1.64 255.255.255.192
+
+                  Router จึงรู้ขอบเขตของวง ว่า IP ไหนใช้ได้อันไหนใช้ไม่ได้
+
+
+
+            บอก PC ว่า Default Gateway คือใคร
+                  Router2(dhcp-config)# default-router 192.168.1.126
+                  ความหมายคือ:
+                  เมื่อแจกค่าให้ PC ให้บอก PC ด้วยว่า Default Gateway ของมันคือ 192.168.1.126
+
+PC ใน LAN 2
+|
+├── ติดต่อเครื่องใน Subnet เดียวกัน → ส่งภายใน LAN
+|
+└── ติดต่อ IP ต่าง Subnet → ส่งไป Default Gateway
+192.168.1.126
+
+            บอก PC ว่า DNS Server คือใคร
+
+                  Router2(dhcp-config)# dns-server 192.168.1.126
+
+Excluded Address: กัน IP ที่ไม่ต้องการให้ DHCP แจก
+David ใช้ .126 ให้ Router ไปแล้ว จึงระบุว่าไม่ให้แจก IP นี้แก่ PC
+ออกจาก Pool ก่อน:
+Router2(dhcp-config)# exit
+Router2(config)# ip dhcp excluded-address 192.168.1.126
+
+ดูสิ่งที่ตั้งไว้ด้วย do show run
+ขณะยังอยู่ใน Pool: Router2(dhcp-config)# do show run
+
+ทดสอบว่า LAN 2 ใช้งานได้
+จาก PC4:
+ping 192.168.1.65
+
+ตรวจว่า PC4 ติดต่อ PC3 ได้หรือไม่
+ping 192.168.1.126
+ตรวจว่า PC4 ติดต่อพอร์ต LAN ของ Router2 ซึ่งเป็น Gateway ได้หรือไม่
+
+. บันทึก Configuration
+Transcript บอกว่าเขาบันทึก Router ทั้งสองตัว ตัวอย่างคำสั่งเต็มคือ:
+Router2(config)# end
+Router2# copy running-config startup-config
+ความหมายคือบันทึก Configuration ที่กำลังใช้อยู่ ให้ Router นำกลับมาใช้เมื่อเริ่มทำงานใหม่
+
+จากนั้นตั้ง IP ให้ WAN ระหว่าง Router
+
+(ตอนที่เรากำหนด IP ให้กับ router ที่เป็น last usable
+เป็นพอร์ตฝั่ง LAN สำคัญมาก)
+
+But now เรากำลังตั้ง พอร์ต serial ที่ต่อระหว่าง Router
+ใช้ Subnet ที่สาม:
+192.168.1.128/26
+
+Router1 มันคือสายที่เชื่อมกันใน WAN Router2
+192.168.1.129 ================= 192.168.1.130
+Serial Link
+
+ตอนนั้นเราเลือกพอร์ต Gig แล้วตั้ง .126
+interface Gig 0/0
+
+      ip address 192.168.1.126 255.255.255.192
+
+ความหมายคือ:
+ให้พอร์ต FastEthernet0/0 ใช้ IP .126 สำหรับเชื่อมกับ LAN 2
+
+ครั้งนี้ เราเลือกอีกพอร์ต คือ Serial แล้วตั้ง .130
+interface serial 2/0
+
+ip address 192.168.1.130 255.255.255.192
+
+ความหมายคือ:
+ให้พอร์ต Serial2/0 ใช้ IP .130 สำหรับเชื่อมกับ Router1
+
+ตอนนี้ พอร์ต Serial ทั้งสองฝั่งอยู่ในวงเดียวกัน:
+
+WAN: 192.168.1.128/26 (subnet ที่ 3 , .0 (ใช้กับ LAN 1 ไปแล้ว), .64 (ใช้กับ LAN2) , .128(ใช้กับ Router) , .192 (ยังว่างให้ใช้) )
+
+├── Router1 Serial: 192.168.1.129
+└── Router2 Serial: 192.168.1.130
+
+เมื่อ Router1 สั่ง:
+ping 192.168.1.130
+จึงกำลังทดสอบว่า ติดต่อพอร์ต Serial ของ Router2 ได้หรือยัง ไม่ใช่ทดสอบ PC ฝั่ง LAN 2 ครับ
+
+คำสั่ง interface ... เลือกพอร์ต ส่วน ip address ... ตั้ง IP ให้พอร์ตที่เลือกอยู่
+
+จำเอาไว้
+Router เชื่อมหลาย Network ได้ จึงมี IP บนแต่ละ Interface ที่ใช้เชื่อม Network เหล่านั้น ใน Lab นี้ Router แต่ละตัวใช้สองพอร์ต จึงตั้งสอง IP ครับ
+
+ขั้นต่อไปคือให้ Router รู้ทางไป LAN ฝั่งตรงข้าม ซึ่งเป็นช่วง EIGRP
+Router แต่ละตัวต้องรู้ว่า จะส่งข้อมูลไป LAN ฝั่งตรงข้ามทางไหน
+เปิด EIGRP เพื่อให้ Router1 และ Router2 แลกเปลี่ยนข้อมูลเส้นทาง แล้วตรวจด้วย show และทดสอบด้วย Ping ครับ
+
+Router รู้จัก Network ที่ต่อกับ Interface ของตัวเองโดยตรงอยู่แล้ว
+ทำไมตั้ง IP แล้ว ยังต้องมี EIGRP?
+
+Router รู้จัก Network ที่ต่อกับ Interface ของตัวเองโดยตรงอยู่แล้ว
+ก่อนแลกเปลี่ยนเส้นทาง:
+
+      Router	Network ที่รู้จักโดยตรง
+      Router1	LAN 1: 192.168.1.0/26 และ WAN: 192.168.1.128/26
+      Router2	LAN 2: 192.168.1.64/26 และ WAN: 192.168.1.128/26
+
+      แต่ Router1 ยังต้องรู้ทางไป LAN 2 และ Router2 ยังต้องรู้ทางกลับไป LAN 1
+
+EIGRP ช่วยให้เกิดการเรียนรู้แบบนี้:
+Router2 บอก Router1: ก็คือบอก R1 ว่าให้เข้ามารู้จัก .64 ได้
+“วง 192.168.1.64/26 ไปผ่านฉันได้”
+
+      Router1 บอก Router2: ก็คือบอก R2 ว่าให้เข้ามารู้จัก  .0 ได้
+      “วง 192.168.1.0/26 ไปผ่านฉันได้”
+
+ต้องมีทางไปและทางกลับ เพราะ Ping ต้องส่งคำขอไปถึงปลายทาง และได้รับคำตอบกลับมาด้วย
+
+เปิด EIGRP บนทั้งสอง Router
+ตัวอย่างคำสั่ง:
+Router1# configure terminal
+Router1(config)# router eigrp 1
+Router1(config-router)# network 192.168.1.0
+Router1(config-router)# no auto-summary
+Router2 ตั้งแบบเดียวกัน:
+Router2# configure terminal
+Router2(config)# router eigrp 1
+Router2(config-router)# network 192.168.1.0
+Router2(config-router)# no auto-summary
+
+                  เลข 1 เป็นตัวอย่าง
+
+            router eigrp 1
+            คือเข้าโหมดตั้งค่า EIGRP สังเกต Prompt:
+
+                                    (config-router)#
+
+ทำไมใช้ network 192.168.1.0 ทั้งที่มีหลาย Subnet?
+เพราะ Classful network
+คำสั่งที่เขาใช้:
+network 192.168.1.0
+เมื่อเขียนแบบนี้โดยไม่ระบุ Wildcard Mask จะเลือก Interface ตามขอบเขต Class เดิม ในกรณีนี้คือ Class C ของ 192.168.1.0 ซึ่งครอบคลุม IP 192.168.1.x
+
+ลองดู IP ของ
+
+      Router1:
+      FastEthernet0/0:  192.168.1.62   → อยู่ในช่วงที่เลือก
+      Serial2/0:        192.168.1.129  → อยู่ในช่วงที่เลือก
+
+      Router2:
+      FastEthernet0/0: 192.168.1.126   → อยู่ในช่วงที่เลือก
+      Serial2/0:       192.168.1.130   → อยู่ในช่วงที่เลือก
+
+จึงเปิด EIGRP บน Interface เหล่านี้ และนำ Network ที่เกี่ยวข้องไปประกาศให้เพื่อนบ้านเรียนรู้
+คำสั่งนี้ไม่ได้เปลี่ยน Subnet Mask ของ Interface เป็น /24
+วงที่เราแบ่งไว้ยังคงเป็น:
+
+      LAN 1 → /26
+      WAN   → /26
+      LAN 2 → /26
+
+แยกให้ออกว่า network อยู่ในโหมดไหน:
+
+      ตำแหน่ง	            ความหมายของ network
+      (dhcp-config)#	      ระบุ Subnet ที่ DHCP ใช้แจก IP
+      (config-router)#        ของ EIGRP เลือก Interface
+      ที่จะเปิดใช้งานEIGRP
+
+no auto-summary ทำอะไร?
+Router(config-router)# no auto-summary
+
+ใช้เพื่อ ปิดการสรุปเส้นทางอัตโนมัติตามขอบเขต Class เดิม
+ตอนนี้ให้รู้หน้าที่ของคำสั่งก่อน ส่วนวิธี Summarization ทำงานอย่างไร ยังไม่ต้องลงรายละเอียดใน Lab นี้
+
+ตรวจว่า Router เป็นเพื่อนบ้าน EIGRP กันแล้วหรือยัง
+
+Router1(config-router)# end
+Router1# show ip eigrp neighbors
+
+บน Router1 ควรเห็นเพื่อนบ้าน:
+192.168.1.130 → Router2 ฝั่ง Serial
+
+บน Router2:
+Router2# show ip eigrp neighbors
+ควรเห็น:
+192.168.1.129 → Router1 ฝั่ง Serial
+
+Neighbor หมายถึง Router ที่ EIGRP ติดต่อและสร้างความสัมพันธ์ด้วย ใน Lab นี้ทั้งสองตัวพบกันผ่าน Serial Link
+
+ตรวจว่าเรียนรู้ Network ฝั่งตรงข้ามแล้วหรือยัง
+Router1# show ip route
+คำสั่งนี้แสดง Routing Table —
+ตารางที่ Router ใช้เลือกเส้นทางส่ง Packet
+
+บน Router1 เห็น:
+Network ปลายทาง รู้จักได้อย่างไร ส่งไปทางไหน
+192.168.1.0/26 ต่ออยู่โดยตรง Gig 0/0
+192.168.1.128/26 ต่ออยู่โดยตรง Serial 2/0
+192.168.1.64/26 เรียนรู้ผ่าน EIGRP ผ่าน 192.168.1.130
+
+ทดสอบ Ping ไป PC ฝั่ง LAN 2
+จาก Router1:
+Router1# ping 192.168.1.65
+Router1# ping 192.168.1.66
+
+ipconfig อย่าลืมเช็ค
+
+จากนั้น David ทดสอบจาก PC1 ไปยัง PC3 และ PC4:
+ping 192.168.1.65
+ping 192.168.1.66
+คราวนี้เป็นการทดสอบ จาก PC ข้าม Router ไปถึง PC อีก LAN
+
+Trace ดูว่าผ่านใครบ้าง
+David Trace จาก PC1 ไป 192.168.1.65 แล้วเห็น:
+PC1
+|
+| ปลายทางอยู่ต่าง Subnet → ส่งให้ Gateway
+v
+192.168.1.62 Router1 ฝั่ง LAN 1
+|
+| Router1 รู้ทางไป LAN 2 ผ่าน Router2
+v
+192.168.1.130 Router2 ฝั่ง Serial
+|
+| Router2 ต่อกับ LAN 2 โดยตรง
+v
+192.168.1.65 PC3
+
+ใน Packet Tracer PC ใช้:
+
+tracert 192.168.1.65
+
+คำสั่ง ช่วยตรวจอะไร
+ping ปลายทางตอบกลับได้หรือไม่
+tracert / traceroute (มีหน้าที่ในการตรวจสอบเส้นทางเหมือนกัน)
+ระหว่างทางผ่าน Router ไหนบ้าง
+
+สรุปคำสั่ง
+show ip eigrp neighbors → พบ Router เพื่อนบ้านหรือยัง?
+show ip route → รู้เส้นทางไปวงฝั่งตรงข้ามหรือยัง?
+ping → ติดต่อปลายทางได้หรือยัง?
+tracert / traceroute → ผ่าน Router ไหนบ้าง?
+
+จำเอาไว้
+DHCP แจกค่าการตั้งค่าให้ PC ส่วน EIGRP แลกเปลี่ยนเส้นทางระหว่าง Router
+PC รู้ Gateway จาก DHCP
+↓
+PC ส่งข้อมูลต่าง Subnet ให้ Gateway
+↓
+Router ใช้ Routing Table เลือกว่าจะส่งต่อทางไหน
